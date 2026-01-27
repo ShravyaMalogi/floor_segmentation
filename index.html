@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>DecorAI</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- Top Bar -->
+  <header class="topbar">
+    <div class="logo">DecorAI</div>
+    <div class="top-actions">
+      <button class="btn ghost">Reset</button>
+      <button class="btn ghost">Export</button>
+      <button class="btn primary">Upload Room</button>
+    </div>
+  </header>
+
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <h3>Texture Library</h3>
+      <p class="subtitle">Select a material to apply</p>
+
+      <div class="filters">
+        <button class="filter active">All</button>
+        <button class="filter">Floor</button>
+        <button class="filter">Wall</button>
+        <button class="filter">Paint</button>
+      </div>
+
+      <div class="texture-list">
+        <div class="texture-card">
+          <img src="https://images.unsplash.com/photo-1600585154340-be6161a56a0c" />
+          <span>Oak Wood Flooring</span>
+        </div>
+
+        <div class="texture-card">
+          <img src="https://images.unsplash.com/photo-1600607687939-ce8a6c25118c" />
+          <span>Deep Blue Paint</span>
+        </div>
+
+        <div class="texture-card">
+          <img src="https://images.unsplash.com/photo-1505691938895-1758d7feb511" />
+          <span>Floral Wallpaper</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Canvas -->
+    <main class="canvas">
+      <div class="start-box">
+        <div class="icon">🖼️</div>
+        <h2>Start Designing</h2>
+        <p>
+          Upload a photo of your room, or try our demo room to see how the magic works.
+        </p>
+
+        <button class="btn primary large">Upload Photo</button>
+        <button class="btn ghost large">Try Demo Room</button>
+      </div>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
