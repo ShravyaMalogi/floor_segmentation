@@ -21,6 +21,9 @@ from texture_mapping import (
 from wall_segmentation.segmenation import wall_segmenting, build_model
 from wall_estimation.estimation import wall_estimation
 
+# Import the new tiling functions
+from floor_texture_tiling import apply_tiled_texture_to_floor, tile_texture
+
 
 # --------------------------------------------------
 # App init
@@ -49,6 +52,11 @@ os.makedirs(DATA_FOLDER, exist_ok=True)
 # Load model once
 # --------------------------------------------------
 model = build_model()
+
+# --------------------------------------------------
+# Configuration for texture tiling
+# --------------------------------------------------
+DEFAULT_TILE_SIZE = (100, 100)  # Width, Height in pixels
 
 
 # --------------------------------------------------
@@ -95,7 +103,6 @@ def predict_image_room():
         np.save(MASK_PATH, mask)
         np.save(CORNERS_PATH, np.array(corners))
 
-        # Tell frontend to reload
         return jsonify({
             "status": "success",
             "reload": True
@@ -104,6 +111,72 @@ def predict_image_room():
     except Exception as e:
         print("UPLOAD ERROR:", e)
         return jsonify({"error": "Server error"}), 500
+
+
+# --------------------------------------------------
+# Apply texture with TILING (NEW!)
+# --------------------------------------------------
+@app.route("/apply_texture", methods=["POST"])
+def apply_texture():
+    """
+    Apply a tiled texture to the floor.
+    This uses repeating tile patterns instead of stretching/warping.
+    """
+    try:
+        data = request.get_json()
+        texture_name = data.get("texture")
+        tile_size = data.get("tile_size", DEFAULT_TILE_SIZE)
+        
+        if not texture_name:
+            return jsonify({"error": "No texture specified"}), 400
+        
+        # Validate files exist
+        if not os.path.isfile(ROOM_IMAGE):
+            return jsonify({"error": "No room image found. Upload a room first."}), 400
+        
+        if not os.path.isfile(MASK_PATH):
+            return jsonify({"error": "No floor mask found. Process room image first."}), 400
+        
+        # Load room image and floor mask
+        room_img = cv2.imread(ROOM_IMAGE)
+        floor_mask = np.load(MASK_PATH)
+        
+        # Convert boolean mask to uint8 if needed
+        if floor_mask.dtype == bool:
+            floor_mask = floor_mask.astype(np.uint8) * 255
+        
+        # Load texture
+        texture_path = os.path.join(TEXTURE_LIBRARY, texture_name)
+        if not os.path.isfile(texture_path):
+            return jsonify({"error": f"Texture not found: {texture_name}"}), 404
+        
+        texture = cv2.imread(texture_path)
+        if texture is None:
+            return jsonify({"error": "Failed to load texture"}), 500
+        
+        # Apply tiled texture to floor
+        print(f"Applying tiled texture: {texture_name} with tile size: {tile_size}")
+        result = apply_tiled_texture_to_floor(
+            room_img, 
+            floor_mask, 
+            texture,
+            tile_size=tuple(tile_size) if isinstance(tile_size, list) else tile_size
+        )
+        
+        # Save result
+        cv2.imwrite(TEXTURED_ROOM_PATH, result)
+        
+        return jsonify({
+            "status": "success",
+            "textured_room": "/static/IMG/textured_room.jpg",
+            "message": f"Texture applied with repeating tile pattern"
+        })
+    
+    except Exception as e:
+        print("TEXTURE APPLICATION ERROR:", e)
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 
 # --------------------------------------------------
@@ -127,56 +200,41 @@ def room():
         "index.html",
         room=room_image,
         textures=textures,
-        enable_textures=os.path.isfile(ROOM_IMAGE)
     )
 
 
 # --------------------------------------------------
-# Apply texture (CLICK)
+# Static file serving
 # --------------------------------------------------
-@app.route("/result_textured", methods=["POST"])
-def result_textured():
+@app.route("/static/<path:path>")
+def serve_static(path):
+    return send_from_directory("static", path)
+
+
+# --------------------------------------------------
+# Tile size configuration (optional)
+# --------------------------------------------------
+@app.route("/set_tile_size", methods=["POST"])
+def set_tile_size():
+    """Allows frontend to configure tile size dynamically"""
     try:
         data = request.get_json()
-        texture_name = os.path.basename(data.get("texture", ""))
-        texture_path = os.path.join(TEXTURE_LIBRARY, texture_name)
-
-        if not os.path.isfile(ROOM_IMAGE):
-            return jsonify({"state": "error", "msg": "Upload room first"}), 400
-
-        if not os.path.isfile(texture_path):
-            return jsonify({"state": "error", "msg": "Texture not found"}), 400
-
-        img = load_img(ROOM_IMAGE)
-        corners = np.load(CORNERS_PATH)
-        mask = np.load(MASK_PATH)
-
-        texture = load_texture(texture_path, 6, 6)
-        textured = map_texture(texture, img, corners, mask)
-        out = brightness_transfer(img, textured, mask)
-
-        save_image(out, TEXTURED_ROOM_PATH)
-
+        tile_width = data.get("width", 100)
+        tile_height = data.get("height", 100)
+        
+        global DEFAULT_TILE_SIZE
+        DEFAULT_TILE_SIZE = (tile_width, tile_height)
+        
         return jsonify({
-            "state": "success",
-            "room_path": "/static/IMG/textured_room.jpg"
+            "status": "success",
+            "tile_size": DEFAULT_TILE_SIZE
         })
-
     except Exception as e:
-        print("TEXTURE ERROR:", e)
-        return jsonify({"state": "error", "msg": "Texture processing failed"}), 500
+        return jsonify({"error": str(e)}), 500
 
 
 # --------------------------------------------------
-# Serve textures
-# --------------------------------------------------
-@app.route("/textures/<path:filename>")
-def serve_texture(filename):
-    return send_from_directory(TEXTURE_LIBRARY, filename)
-
-
-# --------------------------------------------------
-# Run
+# Run app
 # --------------------------------------------------
 if __name__ == "__main__":
-    app.run(port=9000, debug=True)
+    app.run(debug=True, host="0.0.0.0", port=5000)
